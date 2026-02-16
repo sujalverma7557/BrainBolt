@@ -1,0 +1,72 @@
+.bbButton {
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-lg);
+  transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+}
+
+.bbButton:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.bbButton:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.bbButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.variant--primary {
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+.variant--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary) 0.35);
+}
+
+.variant--secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 2px solid var(--color-border);
+}
+
+.variant--ghost {
+  background: transparent;
+  color: var(--color-text);
+  border: none;
+}
+
+.variant--danger {
+  background: var(--color-error);
+  color: white;
+  border: none;
+}
+
+.size--sm {
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: var(--text-sm);
+}
+
+.size--md {
+  padding: var(--spacing-3) var(--spacing-5);
+  font-size: var(--text-base);
+}
+
+.size--lg {
+  padding: var(--spacing-4) var(--spacing-6);
+  font-size: var(--text-lg);
+}
+
+.fullWidth {
+  width: 100%;
+}

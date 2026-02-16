@@ -1,0 +1,8 @@
+{
+  "name": "brainbolt",
+  "private": true,
+  "scripts": {
+    "start": "docker compose up --build",
+    "dev": "cd apps/web && npm run dev"
+  }
+}
