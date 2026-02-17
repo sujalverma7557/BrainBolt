@@ -18,7 +18,7 @@ BrainBolt is an adaptive infinite quiz: one question at a time, with difficulty 
 
 ## Demo
 
-**[Watch the demo video](https://example.com/demo)**
+**[Watch the demo video]([https://example.com/demo](https://drive.google.com/file/d/1VLkifutZShf72cHe9QT0fZ7GL8w_ocAQ/view?usp=sharing))**
 
 ---
 
