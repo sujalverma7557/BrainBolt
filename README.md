@@ -16,7 +16,6 @@ BrainBolt is an adaptive infinite quiz: one question at a time, with difficulty 
 
 ---
 
-
 ## Demo
 
 **[Watch the demo video](https://example.com/demo)**
@@ -35,6 +34,7 @@ docker compose up --build
 
 The first run builds the app and seed image, starts PostgreSQL and Redis, seeds the database, and starts the web app. Open **http://localhost:3000** when the build completes.
 
+Stop with `Ctrl+C`. To tear down: `docker compose down`.
 
 ---
 
@@ -45,7 +45,7 @@ The first run builds the app and seed image, starts PostgreSQL and Redis, seeds 
 - **Metrics** — Current difficulty, streak, max streak, total score, accuracy, and the last 10 answers with level and outcome.
 - **New game** — Starts a new identity in the browser; the previous run remains on the leaderboard under its id.
 
-The application ships with multiple seed questions across multiple difficulties and subjects. For API contracts, database schema, scoring, and edge-case handling, see **docs/LLD.md**.
+The application ships with 135 seed questions across multiple difficulties and subjects. For API contracts, database schema, scoring, and edge-case handling, see **docs/LLD.md**.
 
 ---
 
@@ -56,6 +56,8 @@ The application ships with multiple seed questions across multiple difficulties 
 - **Database** — PostgreSQL 16, Drizzle ORM
 - **Cache / session** — Redis (user state, question pools, rate limiting, session-asked set)
 - **Runtime** — Docker Compose (Postgres, Redis, seed job, app on port 3000)
+
+Local development is supported with a local PostgreSQL and Redis instance; copy `.env.example` to `apps/web/.env` and set `DATABASE_URL` and `REDIS_URL` accordingly.
 
 ---
 

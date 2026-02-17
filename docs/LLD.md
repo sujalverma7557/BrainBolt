@@ -1,72 +1,80 @@
-# BrainBolt – Low-Level Design (LLD)
+# BrainBolt – Low-Level Design
 
-## 1. Class / Module Responsibilities
+## Overview
 
-| Module | Responsibility |
-|--------|----------------|
-| **AdaptiveEngine** (`lib/adaptive.ts`) | Computes next difficulty from current difficulty, correctness, and streak. Implements stabilizer (min streak to increase + hysteresis). |
-| **ScoreService** (`lib/score.ts`) | Base points by difficulty, streak multiplier (capped), and score delta for a single answer. |
-| **UserStateService** (in `lib/quiz-service.ts`) | getOrCreateUser, getUserState (with optional streak decay), getOrCreateUserState. Reads/writes user_state and Redis cache. |
-| **QuestionService** (in `lib/quiz-service.ts`) | getQuestionIdsByDifficulty (with Redis cache), getQuestionById, pickNextQuestionId (with fallback to adjacent difficulties). |
-| **LeaderboardService** (in `lib/quiz-service.ts` + API routes) | Upsert leaderboard_score and leaderboard_streak on each answer; compute rank; GET /leaderboard/score and /leaderboard/streak. |
-| **Quiz API routes** (`app/api/v1/quiz/*`) | GET next (with rate limit), POST answer (idempotency, stateVersion), GET metrics. |
-| **Rate limiter** (`lib/rate-limit.ts`) | Redis-based per-user, per-endpoint rate limit (e.g. 60/min). |
+This doc covers the architecture and design decisions for BrainBolt. I've organized it by component and then the key algorithms and edge cases.
 
----
+## Components
 
-## 2. API Schemas
+**AdaptiveEngine** (`lib/adaptive.ts`) handles difficulty calculation. It takes the current difficulty, whether the answer was correct, and the current streak, then returns the next difficulty level. The main thing here is the stabilizer to prevent ping-pong — requires a streak of at least 2 before increasing difficulty, and wrong answers decrease by 1 (hysteresis).
+
+**ScoreService** (`lib/score.ts`) calculates points. Base points scale with difficulty, then we multiply by a streak multiplier that's capped at 3x. Wrong answers give zero points.
+
+**UserStateService** (inside `lib/quiz-service.ts`) manages user state. Functions like `getOrCreateUser`, `getUserState`, and `getOrCreateUserState` handle reading/writing to both the DB and Redis cache. The streak decay logic is here too — if someone hasn't answered in 24 hours, we reset their streak to 0.
+
+**QuestionService** (also in `lib/quiz-service.ts`) deals with questions. `getQuestionIdsByDifficulty` fetches question IDs for a given difficulty level (cached in Redis). `pickNextQuestionId` picks the next question, excluding ones already shown in the session. If we run out at the current difficulty, it falls back to adjacent difficulties.
+
+**LeaderboardService** (in `lib/quiz-service.ts` plus the API routes) updates leaderboards on every answer. We upsert both `leaderboard_score` and `leaderboard_streak` tables, then compute ranks. The API routes return top N users.
+
+**Quiz API routes** (`app/api/v1/quiz/*`) are the main endpoints. GET `/next` returns the next question with rate limiting. POST `/answer` handles submissions with idempotency and state version checks. GET `/metrics` returns user stats.
+
+**Rate limiter** (`lib/rate-limit.ts`) uses Redis to limit requests per user per endpoint. Currently set to 60 requests per minute.
+
+## API Endpoints
 
 ### GET /v1/quiz/next
 
-- **Request**: Query `sessionId` (optional). Headers: `x-user-id` (or cookie `user-id`).
-- **Response**:
-  - `questionId`, `difficulty`, `prompt`, `choices` (string[]), `sessionId`, `stateVersion`, `currentScore`, `currentStreak`.
+Takes an optional `sessionId` query param and requires `x-user-id` header (or `user-id` cookie). Returns the next question with `questionId`, `difficulty`, `prompt`, `choices` array, `sessionId`, `stateVersion`, `currentScore`, and `currentStreak`.
 
 ### POST /v1/quiz/answer
 
-- **Request body**: `{ sessionId, questionId, answer, stateVersion, answerIdempotencyKey }`.
-- **Response**: `correct`, `newDifficulty`, `newStreak`, `scoreDelta`, `totalScore`, `stateVersion`, `leaderboardRankScore`, `leaderboardRankStreak`.
+Request body needs `sessionId`, `questionId`, `answer`, `stateVersion`, and `answerIdempotencyKey`. Response includes whether it was `correct`, the `newDifficulty`, `newStreak`, `scoreDelta`, `totalScore`, updated `stateVersion`, and both `leaderboardRankScore` and `leaderboardRankStreak`.
 
 ### GET /v1/quiz/metrics
 
-- **Request**: Headers: `x-user-id` (or cookie).
-- **Response**: `currentDifficulty`, `streak`, `maxStreak`, `totalScore`, `accuracy`, `difficultyHistogram`, `recentPerformance`.
+Requires `x-user-id` header. Returns `currentDifficulty`, `streak`, `maxStreak`, `totalScore`, `accuracy`, `difficultyHistogram`, and `recentPerformance` (last 10 answers).
 
 ### GET /v1/leaderboard/score
 
-- **Response**: Array of `{ rank, userId, totalScore, updatedAt }` ordered by totalScore DESC.
+Returns an array of users sorted by total score descending. Each entry has `rank`, `userId`, `totalScore`, and `updatedAt`.
 
 ### GET /v1/leaderboard/streak
 
-- **Response**: Array of `{ rank, userId, maxStreak, updatedAt }` ordered by maxStreak DESC.
+Same structure but sorted by max streak descending.
 
----
+## Database Schema
 
-## 3. DB Schema and Indexes
+**users** table: just `id` (primary key) and `created_at`. Simple.
 
-- **users**: `id` (PK), `created_at`.
-- **questions**: `id` (PK), `difficulty`, `prompt`, `choices` (JSONB), `correct_answer_hash`, `tags` (JSONB). Index: `questions_difficulty_idx(difficulty)`.
-- **user_state**: `user_id` (PK, FK users), `current_difficulty`, `streak`, `max_streak`, `total_score`, `last_question_id`, `last_answer_at`, `state_version`, `session_id`.
-- **answer_log**: `id` (PK), `user_id`, `question_id`, `difficulty`, `answer`, `correct`, `score_delta`, `streak_at_answer`, `answered_at`, `idempotency_key`. Unique index on `idempotency_key`. Index: `answer_log_user_answered_idx(user_id, answered_at)`.
-- **leaderboard_score**: `user_id` (PK), `total_score`, `updated_at`. Index: `leaderboard_score_total_score_idx(total_score)`.
-- **leaderboard_streak**: `user_id` (PK), `max_streak`, `updated_at`. Index: `leaderboard_streak_max_streak_idx(max_streak)`.
+**questions** table: `id`, `difficulty` (1-10), `prompt`, `choices` (JSONB array), `correct_answer_hash` (SHA256), and `tags` (JSONB). Indexed on `difficulty` for fast lookups.
 
----
+**user_state** table: `user_id` (PK, references users), `current_difficulty`, `streak`, `max_streak`, `total_score`, `last_question_id`, `last_answer_at`, `state_version` (for optimistic locking), and `session_id`.
 
-## 4. Cache Strategy
+**answer_log** table: logs every answer. Fields include `id`, `user_id`, `question_id`, `difficulty`, `answer`, `correct` (0 or 1), `score_delta`, `streak_at_answer`, `answered_at`, and `idempotency_key`. Unique index on `idempotency_key` prevents duplicates. Also indexed on `(user_id, answered_at)` for metrics queries.
 
-| Key pattern | TTL | Invalidation |
-|-------------|-----|--------------|
-| `user_state:{userId}` | 1 hour | On answer: DEL after DB update. |
-| `questions:difficulty:{d}` | 24h | On seed: flush or DEL keys. |
-| `idempotency:{answerIdempotencyKey}` | 24h | None (natural expiry). |
-| `ratelimit:{userId}:{endpoint}` | 60s | None (sliding window by key). |
+**leaderboard_score** table: `user_id` (PK), `total_score`, `updated_at`. Indexed on `total_score` for ranking.
 
-- **Real-time**: Answer response returns new state and ranks in the same response. Next GET /next and GET /leaderboard/* read from DB (or cache); user state cache is invalidated on answer so next read is fresh.
+**leaderboard_streak** table: `user_id` (PK), `max_streak`, `updated_at`. Indexed on `max_streak`.
 
----
+## Caching
 
-## 5. Pseudocode: Adaptive Algorithm
+I'm using Redis for a few things:
+
+- `user_state:{userId}` — cached user state, TTL 1 hour. Invalidated (DEL) right after we update the DB on answer submission so the next read is fresh.
+
+- `questions:difficulty:{d}` — list of question IDs for each difficulty level, TTL 24 hours. When we seed new questions, we flush these keys.
+
+- `idempotency:{answerIdempotencyKey}` — cached answer responses, TTL 24 hours. Prevents duplicate processing.
+
+- `ratelimit:{userId}:{endpoint}` — sliding window counter, TTL 60 seconds.
+
+- `session_asked:{userId}:{sessionId}` — set of question IDs already shown in this session, TTL 2 hours. Used to prevent repeats.
+
+For real-time updates, the answer response includes the new state and ranks immediately. Subsequent GET requests read from DB (or cache if still valid), but we invalidate user state cache on every answer so it's always fresh.
+
+## Adaptive Algorithm
+
+The difficulty adjustment logic is pretty straightforward:
 
 ```
 MIN_DIFFICULTY = 1, MAX_DIFFICULTY = 10
@@ -84,11 +92,11 @@ function getNextDifficulty(currentDifficulty, correct, currentStreak):
     return MIN_DIFFICULTY
 ```
 
-Stabilizer: (1) Require streak ≥ 2 to increase difficulty (avoids ping-pong on single correct). (2) One wrong step decreases by 1 (hysteresis).
+The stabilizer prevents ping-pong: you need at least 2 correct in a row to level up. Wrong answers decrease by 1 (hysteresis). This stops the difficulty from bouncing back and forth on alternating correct/wrong answers.
 
----
+## Score Calculation
 
-## 6. Pseudocode: Score Calculation
+Points are calculated like this:
 
 ```
 BASE = 100, STREAK_FACTOR = 0.1, STREAK_CAP = 3
@@ -104,26 +112,28 @@ function scoreDelta(difficulty, streak, correct):
   return round(basePoints(difficulty) * streakMultiplier(streak))
 ```
 
----
+Base points scale linearly with difficulty (level 1 = 100, level 5 = 500, etc.). Streak multiplier starts at 1x and increases by 0.1 per streak, capped at 3x. So a streak of 10+ gives 3x multiplier. Wrong answers give zero points.
 
-## 7. Leaderboard Update Strategy
+## Leaderboard Updates
 
-- On every successful answer (inside the same transaction as user_state and answer_log): upsert `leaderboard_score` (userId, totalScore, updatedAt) and `leaderboard_streak` (userId, maxStreak, updatedAt).
-- Rank by score: `rank = 1 + COUNT(*) WHERE total_score > current_user_total_score`.
-- Rank by streak: `rank = 1 + COUNT(*) WHERE max_streak > current_user_max_streak`.
-- Ranks are returned in the POST /answer response; GET /leaderboard/score and GET /leaderboard/streak return top N rows.
+Every time someone submits an answer, we update both leaderboard tables in the same transaction (along with user_state and answer_log). We upsert `leaderboard_score` with the new total score and `leaderboard_streak` with the new max streak if it's higher.
 
----
+Ranking is done with a simple COUNT query: `rank = 1 + COUNT(*) WHERE total_score > current_user_total_score` (same for streak). Ranks are computed on-demand and returned in the POST /answer response. The GET endpoints return top N rows sorted by score/streak.
 
-## 8. Edge Cases
+## Edge Cases
 
-| Edge case | Handling |
-|-----------|----------|
-| Streak reset on wrong answer | On incorrect: set streak = 0 in user_state and in response. |
-| Streak decay after inactivity | When loading state: if `lastAnswerAt` &gt; 24h ago, treat streak as 0 (in memory and when serving). |
-| Duplicate answer (idempotency) | Check Redis `idempotency:{key}` first; if present return cached response. Else process and store response in Redis. DB unique index on idempotency_key prevents double insert. |
-| First question | Default difficulty 1; getOrCreateUserState creates row with currentDifficulty=1. |
-| Difficulty at min/max | Clamp in getNextDifficulty; at 1 wrong → stay 1; at 10 correct with enough streak → stay 10. |
-| Ping-pong | Min streak ≥ 2 to increase; one wrong decreases by 1 only. |
-| Empty question pool for difficulty | pickNextQuestionId falls back to nearest non-empty difficulty (lower first, then higher). |
-| State version mismatch | POST /answer checks stateVersion; if different from server, return 409 and ask client to refresh. |
+**Streak reset on wrong answer** — When someone gets a question wrong, we set streak to 0 in both the DB and the response.
+
+**Streak decay after inactivity** — If `lastAnswerAt` is more than 24 hours ago, we treat the streak as 0. This is checked when loading state from cache or DB.
+
+**Duplicate answer submission** — We check Redis first for the idempotency key. If it exists, return the cached response. Otherwise process it and store the response in Redis. The DB unique index on `idempotency_key` prevents double inserts.
+
+**First question** — New users start at difficulty 1. `getOrCreateUserState` creates the row with `currentDifficulty=1`.
+
+**Difficulty at min/max** — The clamp function handles bounds. At level 1, wrong answers keep you at 1. At level 10, correct answers keep you at 10 (even with streak ≥ 2).
+
+**Ping-pong** — The streak requirement (≥ 2) plus hysteresis (decrease by 1) prevents rapid oscillation. You can't go up and down on every other answer.
+
+**Empty question pool** — If we've shown all questions at the current difficulty in this session, `pickNextQuestionId` falls back to adjacent difficulties (lower first, then higher). Still excludes questions already shown this session.
+
+**State version mismatch** — POST /answer checks the `stateVersion` from the client. If it doesn't match the server's version, we return 409 Conflict and ask the client to refresh. This handles concurrent updates.

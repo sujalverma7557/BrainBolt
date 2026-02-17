@@ -2,11 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader } from '@/components/ui';
 import { Button, Badge } from '@/components/ui';
 import { fetchMetrics, ensureUserId } from '@/lib/api-client';
 
-export default function MetricsPage() {
+function MetricsContent() {
   const [data, setData] = useState<{
     currentDifficulty: number;
     streak: number;
@@ -134,3 +135,12 @@ export default function MetricsPage() {
     </main>
   );
 }
+
+export default dynamic(() => Promise.resolve(MetricsContent), {
+  loading: () => (
+    <main style={{ padding: 'var(--spacing-6)', maxWidth: '40rem', margin: '0 auto' }}>
+      <Card padding="lg"><CardContent>Loading metrics…</CardContent></Card>
+    </main>
+  ),
+  ssr: false,
+});

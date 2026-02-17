@@ -1,5 +1,14 @@
-import React from 'react';
-import { LeaderboardClient } from './LeaderboardClient';
+import React, { Suspense } from 'react';
+import dynamicImport from 'next/dynamic';
+
+const LeaderboardClient = dynamicImport(() => import('./LeaderboardClient').then((m) => ({ default: m.LeaderboardClient })), {
+  loading: () => (
+    <div style={{ padding: 'var(--spacing-6)', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+      Loading leaderboards…
+    </div>
+  ),
+  ssr: false,
+});
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +36,9 @@ export default async function LeaderboardPage() {
       >
         Leaderboards
       </h1>
-      <LeaderboardClient />
+      <Suspense fallback={<div style={{ padding: 'var(--spacing-6)', textAlign: 'center', color: 'var(--color-text-muted)' }}>Loading…</div>}>
+        <LeaderboardClient />
+      </Suspense>
     </main>
   );
 }
