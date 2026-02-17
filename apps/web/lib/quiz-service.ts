@@ -2,6 +2,26 @@ import { createHash } from 'crypto';
 import { eq, and, gt, sql } from 'drizzle-orm';
 import { db, schema } from '@/lib/db';
 import { redis, cacheKeys, TTL } from '@/lib/redis';
+
+/** Question IDs already shown in this session (so we don't repeat in one play). */
+export async function getSessionAskedQuestionIds(
+  userId: string,
+  sessionId: string
+): Promise<number[]> {
+  const key = cacheKeys.sessionAsked(userId, sessionId);
+  const members = await redis.smembers(key);
+  return members.map(Number).filter((n) => !Number.isNaN(n));
+}
+
+export async function addSessionAskedQuestionId(
+  userId: string,
+  sessionId: string,
+  questionId: number
+): Promise<void> {
+  const key = cacheKeys.sessionAsked(userId, sessionId);
+  await redis.sadd(key, String(questionId));
+  await redis.expire(key, TTL.sessionAsked);
+}
 import { getNextDifficulty } from '@/lib/adaptive';
 import { scoreDelta } from '@/lib/score';
 
@@ -111,27 +131,46 @@ export async function getQuestionById(questionId: number) {
   return q ?? null;
 }
 
+/**
+ * Pick next question at the given difficulty. Excludes last question and, when
+  session is provided, all questions already shown in this play session so
+  questions never repeat in one game. and uses adjacent difficulty only when there
+  are no unseen questions at current difficulty in this session.
+ */
 export async function pickNextQuestionId(
   difficulty: number,
-  excludeQuestionId: number | null
+  excludeQuestionId: number | null,
+  session?: { userId: string; sessionId: string }
 ): Promise<number | null> {
+  const excludeSet = new Set<number>();
+  if (excludeQuestionId !== null) excludeSet.add(excludeQuestionId);
+  if (session) {
+    const sessionAsked = await getSessionAskedQuestionIds(session.userId, session.sessionId);
+    sessionAsked.forEach((id) => excludeSet.add(id));
+  }
+
   let ids = await getQuestionIdsByDifficulty(difficulty);
-  if (excludeQuestionId !== null) ids = ids.filter((id) => id !== excludeQuestionId);
+  ids = ids.filter((id) => !excludeSet.has(id));
+
+  // No unseen questions at current difficulty so try adjacent difficulties
   if (ids.length === 0) {
-    // Fallback: try adjacent difficulties
     for (let d = difficulty - 1; d >= 1; d--) {
       ids = await getQuestionIdsByDifficulty(d);
+      ids = ids.filter((id) => !excludeSet.has(id));
       if (ids.length > 0) break;
     }
     if (ids.length === 0) {
       for (let d = difficulty + 1; d <= 10; d++) {
         ids = await getQuestionIdsByDifficulty(d);
+        ids = ids.filter((id) => !excludeSet.has(id));
         if (ids.length > 0) break;
       }
     }
   }
   if (ids.length === 0) return null;
-  return ids[Math.floor(Math.random() * ids.length)];
+  const picked = ids[Math.floor(Math.random() * ids.length)];
+  if (session) await addSessionAskedQuestionId(session.userId, session.sessionId, picked);
+  return picked;
 }
 
 export async function getCachedIdempotencyResponse(

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from '@/components/ThemeProvider';
+import { startNewGame } from '@/lib/api-client';
 
 const navLinks = [
   { href: '/', label: 'BrainBolt', isBrand: true },
@@ -52,23 +53,42 @@ export function AppNav() {
           );
         })}
       </div>
-      <button
-        type="button"
-        onClick={toggleTheme}
-        aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-        style={{
-          padding: 'var(--spacing-2) var(--spacing-3)',
-          background: 'var(--color-bg)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-md)',
-          fontSize: 'var(--text-sm)',
-          fontWeight: 'var(--font-weight-medium)',
-          color: 'var(--color-text)',
-          transition: 'border-color 0.15s, background 0.15s',
-        }}
-      >
-        {theme === 'dark' ? 'Light' : 'Dark'}
-      </button>
+      <div style={{ display: 'flex', gap: 'var(--spacing-2)', alignItems: 'center' }}>
+        <button
+          type="button"
+          onClick={startNewGame}
+          style={{
+            padding: 'var(--spacing-2) var(--spacing-3)',
+            background: 'var(--color-primary)',
+            border: 'none',
+            borderRadius: 'var(--radius-md)',
+            fontSize: 'var(--text-sm)',
+            fontWeight: 'var(--font-weight-medium)',
+            color: 'var(--color-primary-foreground, white)',
+            cursor: 'pointer',
+            transition: 'opacity 0.15s',
+          }}
+        >
+          New game
+        </button>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          style={{
+            padding: 'var(--spacing-2) var(--spacing-3)',
+            background: 'var(--color-bg)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-md)',
+            fontSize: 'var(--text-sm)',
+            fontWeight: 'var(--font-weight-medium)',
+            color: 'var(--color-text)',
+            transition: 'border-color 0.15s, background 0.15s',
+          }}
+        >
+          {theme === 'dark' ? 'Light' : 'Dark'}
+        </button>
+      </div>
     </nav>
   );
 }

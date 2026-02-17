@@ -15,13 +15,16 @@ export async function GET(request: NextRequest) {
   if (!allowed) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
   }
-  const sessionId = request.nextUrl.searchParams.get('sessionId') || undefined;
+  const sessionIdFromQuery = request.nextUrl.searchParams.get('sessionId') || undefined;
 
   try {
-    const state = await getOrCreateUserState(userId, sessionId);
+    const state = await getOrCreateUserState(userId, sessionIdFromQuery);
     const difficulty = state.currentDifficulty;
     const lastQuestionId = state.lastQuestionId ?? null;
-    const questionId = await pickNextQuestionId(difficulty, lastQuestionId);
+    // Using persisted session so we don't repeat questions even if user omits sessionId once
+    const effectiveSessionId = state.sessionId || sessionIdFromQuery;
+    const session = effectiveSessionId ? { userId, sessionId: effectiveSessionId } : undefined;
+    const questionId = await pickNextQuestionId(difficulty, lastQuestionId, session);
     if (!questionId) {
       return NextResponse.json(
         { error: 'No questions available. Run seed script.' },
@@ -37,7 +40,7 @@ export async function GET(request: NextRequest) {
       difficulty: question.difficulty,
       prompt: question.prompt,
       choices: question.choices,
-      sessionId: state.sessionId || sessionId,
+      sessionId: state.sessionId || sessionIdFromQuery,
       stateVersion: state.stateVersion,
       currentScore: state.totalScore,
       currentStreak: state.streak,

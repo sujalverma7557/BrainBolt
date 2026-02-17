@@ -89,3 +89,11 @@ export function ensureUserId(): string {
   }
   return id;
 }
+
+/**  Start as a new user: will generate new id, store it, and then navigate to quiz so backend creates fresh user . */
+export function startNewGame(): void {
+  if (typeof window === 'undefined') return;
+  const id = 'user-' + Math.random().toString(36).slice(2, 12);
+  localStorage.setItem('brainbolt-user-id', id);
+  window.location.href = '/quiz';
+}

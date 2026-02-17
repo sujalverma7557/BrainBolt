@@ -21,6 +21,7 @@ export const cacheKeys = {
   questionPool: (difficulty: number) => `questions:difficulty:${difficulty}`,
   idempotency: (key: string) => `idempotency:${key}`,
   rateLimit: (userId: string, endpoint: string) => `ratelimit:${userId}:${endpoint}`,
+  sessionAsked: (userId: string, sessionId: string) => `session_asked:${userId}:${sessionId}`,
 } as const;
 
 export const TTL = {
@@ -28,4 +29,5 @@ export const TTL = {
   questionPool: 86400, // 24h
   idempotency: 86400, // 24h
   rateLimitWindow: 60, // 1 min
+  sessionAsked: 7200, // 2h
 } as const;
