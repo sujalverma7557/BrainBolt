@@ -27,14 +27,13 @@ BrainBolt is an adaptive infinite quiz: one question at a time, with difficulty 
 **Prerequisites:** Docker and Docker Compose.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/Brain-Bolt.git
+git clone https://github.com/sujalverma7557/BrainBolt.git
 cd Brain-Bolt
 docker compose up --build
 ```
 
 The first run builds the app and seed image, starts PostgreSQL and Redis, seeds the database, and starts the web app. Open **http://localhost:3000** when the build completes.
 
-Stop with `Ctrl+C`. To tear down: `docker compose down`.
 
 ---
 
