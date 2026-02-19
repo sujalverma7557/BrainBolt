@@ -22,6 +22,15 @@ function getRedis(): Redis {
 
 export const redis = getRedis();
 
+export const cacheKeys = {
+  userState: (userId: string) => `user_state:${userId}`,
+  questionPool: (difficulty: number) => `questions:difficulty:${difficulty}`,
+  idempotency: (key: string) => `idempotency:${key}`,
+  rateLimit: (userId: string, endpoint: string) => `ratelimit:${userId}:${endpoint}`,
+  sessionAsked: (userId: string, sessionId: string) => `session_asked:${userId}:${sessionId}`,
+} as const;
+
+
 
 export const TTL = {
   userState: 3600, // 1 hour
