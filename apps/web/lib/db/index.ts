@@ -11,7 +11,13 @@ declare global {
 
 function getDb() {
   if (global.__db) return global.__db;
-  const pool = new pg.Pool({ connectionString, max: 10 });
+  const pool = new pg.Pool({
+    connectionString,
+    max: 10,
+    ssl: process.env.NODE_ENV === 'production'
+      ? { rejectUnauthorized: false }
+      : false,
+   });
   const d = drizzle(pool, { schema });
   global.__db = d;
   return d;
