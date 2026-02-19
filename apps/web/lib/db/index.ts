@@ -14,10 +14,11 @@ function getDb() {
   const pool = new pg.Pool({
     connectionString,
     max: 10,
-    ssl: process.env.NODE_ENV === 'production'
-      ? { rejectUnauthorized: false }
-      : false,
-   });
+
+    ssl: {
+      rejectUnauthorized: false,
+    },
+  });
   const d = drizzle(pool, { schema });
   global.__db = d;
   return d;
