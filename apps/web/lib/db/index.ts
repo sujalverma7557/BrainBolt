@@ -11,18 +11,26 @@ declare global {
 
 function getDb() {
   if (global.__db) return global.__db;
+
   const pool = new pg.Pool({
     connectionString,
     max: 10,
 
-    ssl: {
-      rejectUnauthorized: false,
-    },
+    ssl:
+      process.env.NODE_ENV === 'production'
+        ? {
+            rejectUnauthorized: false,
+            ca: undefined,
+          }
+        : false,
   });
+
   const d = drizzle(pool, { schema });
   global.__db = d;
   return d;
 }
+
+
 
 export const db = getDb();
 export { schema };
