@@ -7,22 +7,21 @@ declare global {
   var __redis: Redis | undefined;
 }
 
+
 function getRedis(): Redis {
   if (global.__redis) return global.__redis;
-  const client = new Redis(redisUrl, { maxRetriesPerRequest: 3 });
+
+  const client = new Redis(redisUrl, {
+    maxRetriesPerRequest: 3,
+    tls: process.env.NODE_ENV === 'production' ? {} : undefined,
+  });
+
   global.__redis = client;
   return client;
 }
 
 export const redis = getRedis();
 
-export const cacheKeys = {
-  userState: (userId: string) => `user_state:${userId}`,
-  questionPool: (difficulty: number) => `questions:difficulty:${difficulty}`,
-  idempotency: (key: string) => `idempotency:${key}`,
-  rateLimit: (userId: string, endpoint: string) => `ratelimit:${userId}:${endpoint}`,
-  sessionAsked: (userId: string, sessionId: string) => `session_asked:${userId}:${sessionId}`,
-} as const;
 
 export const TTL = {
   userState: 3600, // 1 hour
