@@ -13,7 +13,6 @@ function getRedis(): Redis {
 
   const client = new Redis(redisUrl, {
     maxRetriesPerRequest: 3,
-    tls: process.env.NODE_ENV === 'production' ? {} : undefined,
   });
 
   global.__redis = client;
